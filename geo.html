@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>University of Peradeniya - Dept. of Geography Smart Map</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Turf.js for Spatial Calculations & Routing -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Custom scrollbar for sidebar panels */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .leaflet-popup-content-wrapper { border-radius: 0.75rem; padding: 0.25rem; }
+    .leaflet-popup-content { margin: 0.75rem; }
+    
+    /* Pulse Animation for Student Location Pin */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .user-loc-pulse {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased h-screen flex flex-col overflow-hidden">
+
+  <!-- ================= HEADER ================= -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 z-30 flex-none shadow-md">
+    <div class="max-w-full px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="bg-amber-600 p-2 rounded-lg text-white">
+          <i data-lucide="map-pin" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs uppercase tracking-widest text-amber-400 font-semibold">University of Peradeniya</span>
+            <span class="text-slate-500">•</span>
+            <span class="text-xs uppercase tracking-widest text-slate-300">Dept. of Geography</span>
+          </div>
+          <h1 class="text-lg md:text-xl font-bold leading-tight">Smart Indoor Map & Room Availability System</h1>
+        </div>
+      </div>
+      
+      <!-- Desktop Header Actions -->
+      <div class="hidden md:flex items-center space-x-3">
+        <button onclick="toggleModal('about-modal')" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-sm font-medium transition border border-slate-700">
+          <i data-lucide="info" class="w-4 h-4"></i>
+          <span>About & Team</span>
+        </button>
+      </div>
+
+      <!-- Mobile Menu Toggle -->
+      <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-300 hover:text-white p-2">
+        <i data-lucide="menu" class="w-6 h-6"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTENT WORKSPACE ================= -->
+  <div class="flex-1 flex flex-col md:flex-row relative overflow-hidden">
+
+    <!-- LEFT CONTROL SIDEBAR -->
+    <aside id="sidebar" class="w-full md:w-96 bg-white border-r border-slate-200 z-20 flex flex-col absolute md:relative inset-y-0 left-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out shadow-lg md:shadow-none h-full">
+      
+      <!-- KPI DASHBOARD -->
+      <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-bold uppercase text-slate-400 tracking-wider">Live Department Overview</h2>
+          <span id="current-time-display" class="text-xs font-mono font-medium text-slate-500">Mon 10:15 AM</span>
+        </div>
+        <div class="grid grid-cols-4 gap-2">
+          <div class="bg-white p-2 rounded-lg border border-slate-200 text-center shadow-sm">
+            <div id="kpi-total" class="text-lg font-bold text-slate-800">0</div>
+            <div class="text-[10px] font-medium text-slate-500 uppercase">Total</div>
+          </div>
+          <div class="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-center shadow-sm">
+            <div id="kpi-available" class="text-lg font-bold text-emerald-600">0</div>
+            <div class="text-[10px] font-semibold text-emerald-700 uppercase">Available</div>
+          </div>
+          <div class="bg-rose-50 p-2 rounded-lg border border-rose-100 text-center shadow-sm">
+            <div id="kpi-occupied" class="text-lg font-bold text-rose-600">0</div>
+            <div class="text-[10px] font-semibold text-rose-700 uppercase">Occupied</div>
+          </div>
+          <div class="bg-amber-50 p-2 rounded-lg border border-amber-100 text-center shadow-sm">
+            <div id="kpi-upcoming" class="text-lg font-bold text-amber-600">0</div>
+            <div class="text-[10px] font-semibold text-amber-700 uppercase">Upcoming</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEARCH & FILTER TABS -->
+      <div class="p-4 border-b border-slate-100 space-y-3">
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+          <input type="text" id="search-input" onkeyup="handleSearch()" placeholder="Search room, code, or category..." class="w-full pl-9 pr-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition" />
+        </div>
+
+        <!-- Filter Pill Buttons -->
+        <div class="flex items-center space-x-1 overflow-x-auto pb-1 text-xs">
+          <button onclick="setFilter('ALL')" id="filter-ALL" class="filter-btn active-filter bg-slate-800 text-white px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap">All</button>
+          <button onclick="setFilter('AVAILABLE')" id="filter-AVAILABLE" class="filter-btn bg-slate-100 text-slate-600 hover:bg-slate-200 px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap">?? Available</button>
+          <button onclick="setFilter('OCCUPIED')" id="filter-OCCUPIED" class="filter-btn bg-slate-100 text-slate-600 hover:bg-slate-200 px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap">?? Occupied</button>
+          <button onclick="setFilter('UPCOMING')" id="filter-UPCOMING" class="filter-btn bg-slate-100 text-slate-600 hover:bg-slate-200 px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap">?? Upcoming</button>
+        </div>
+
+        <!-- Floor Switcher -->
+        <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-semibold">
+          <button onclick="switchFloor('ALL')" id="floor-btn-ALL" class="flex-1 py-1 rounded-md text-slate-600 transition">All Floors</button>
+          <button onclick="switchFloor('1')" id="floor-btn-1" class="flex-1 py-1 rounded-md bg-white text-slate-800 shadow-sm transition">Floor 1 (Ground)</button>
+          <button onclick="switchFloor('2')" id="floor-btn-2" class="flex-1 py-1 rounded-md text-slate-600 transition">Floor 2 (Upper)</button>
+        </div>
+      </div>
+
+      <!-- NAVIGATION ACTIVE CONTROL PANEL (HIDDEN BY DEFAULT) -->
+      <div id="navigation-panel" class="hidden p-4 bg-amber-50 border-b border-amber-200 space-y-2">
+        <div class="flex items-center justify-between text-amber-900 font-semibold text-sm">
+          <span class="flex items-center space-x-1">
+            <i data-lucide="navigation" class="w-4 h-4 text-amber-600"></i>
+            <span>Active Walking Route</span>
+          </span>
+          <button onclick="clearRoute()" class="text-xs text-amber-700 hover:text-amber-900 underline font-normal">Clear Path</button>
+        </div>
+        <div class="text-xs text-amber-800 space-y-1">
+          <div id="route-destination-text" class="font-medium">To: Conference Room</div>
+          <div class="flex items-center space-x-4 text-slate-600">
+            <span id="route-distance">Dist: -- m</span>
+            <span id="route-time">Est. Walk: -- min</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROOM DIRECTORY LISTING -->
+      <div class="flex-1 overflow-y-auto divide-y divide-slate-100" id="room-list-container">
+        <!-- Room Item Template (Populated via JS) -->
+      </div>
+
+      <!-- GEOLOCATION TRIGGER & FOOTER ACTION -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <button onclick="triggerGeolocation()" class="flex-1 flex items-center justify-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white py-2 px-3 rounded-lg text-xs font-semibold transition">
+          <i data-lucide="crosshair" class="w-4 h-4 text-amber-400"></i>
+          <span>Locate My Position</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAP CONTAINER -->
+    <main class="flex-1 relative h-full bg-slate-200">
+      <div id="map" class="w-full h-full z-10"></div>
+
+      <!-- FLOATING MAP CONTROLS OVERLAY -->
+      <div class="absolute top-4 right-4 z-20 flex flex-col space-y-2">
+        <button onclick="toggleModal('about-modal')" class="md:hidden bg-white p-2.5 rounded-lg shadow-md border border-slate-200 text-slate-700">
+          <i data-lucide="info" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- GEOLOCATION OUTSIDE WARNING BANNER -->
+      <div id="geo-warning-banner" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 z-20 bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 text-xs font-medium border border-amber-600 animate-bounce">
+        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+        <span>Outside indoor coverage. Routing initialized from Main Department Entrance.</span>
+      </div>
+    </main>
+
+    <!-- RIGHT/BOTTOM ROOM DETAILS MODAL / DRAWER -->
+    <div id="room-detail-card" class="hidden absolute bottom-4 right-4 left-4 md:left-auto md:w-96 bg-white rounded-xl shadow-2xl border border-slate-200 z-30 p-4 space-y-3 transition-all duration-200">
+      <div class="flex items-start justify-between">
+        <div>
+          <span id="card-room-category" class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">Lecture Room</span>
+          <h3 id="card-room-name" class="text-base font-bold text-slate-900 leading-tight mt-1">Lecture Room 1</h3>
+          <p id="card-room-id" class="text-xs text-slate-500">RM-LR-001 • Floor 1</p>
+        </div>
+        <button onclick="closeRoomCard()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- STATUS BADGE -->
+      <div class="p-2.5 rounded-lg flex items-center justify-between" id="card-status-container">
+        <div class="flex items-center space-x-2">
+          <span id="card-status-dot" class="w-3 h-3 rounded-full bg-emerald-500"></span>
+          <span id="card-status-text" class="text-xs font-bold uppercase tracking-wide text-emerald-800">AVAILABLE NOW</span>
+        </div>
+        <span id="card-status-time" class="text-xs font-mono text-slate-500">Next class: 11:00 AM</span>
+      </div>
+
+      <!-- DETAILS -->
+      <div class="text-xs space-y-1.5 text-slate-600 border-t border-slate-100 pt-2">
+        <div class="flex justify-between">
+          <span class="text-slate-400">Current Course:</span>
+          <span id="card-current-course" class="font-semibold text-slate-800">None Scheduled</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">Next Scheduled:</span>
+          <span id="card-next-course" class="font-semibold text-slate-800">GGY2022E (11:00 - 12:00)</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">Zone / Corridor:</span>
+          <span id="card-zone" class="text-slate-800">Main Building Left Corridor</span>
+        </div>
+      </div>
+
+      <!-- ACTIONS -->
+      <div class="pt-2 flex space-x-2">
+        <button id="card-nav-btn" onclick="" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 transition">
+          <i data-lucide="navigation-2" class="w-4 h-4"></i>
+          <span>Navigate Here</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= ABOUT & TEAM MODAL ================= -->
+  <div id="about-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-start">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">About the Project</h2>
+          <p class="text-xs text-amber-600 font-medium">Department of Geography • University of Peradeniya</p>
+        </div>
+        <button onclick="toggleModal('about-modal')" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <blockquote class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border-l-4 border-amber-500 italic leading-relaxed">
+        "This project was developed as a Geographical Information Science application to provide an interactive digital map of the Department of Geography, University of Peradeniya. The system integrates GIS room locations, timetable information, room availability, and location-based navigation to help students identify rooms and find available spaces within the department."
+      </blockquote>
+
+      <div class="border-t border-slate-100 pt-3">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Project Team</h3>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="p-2 bg-slate-50 rounded border border-slate-100">
+            <div class="font-semibold text-slate-800">S. Perera</div>
+            <div class="text-[10px] text-slate-500">S/18/1234</div>
+          </div>
+          <div class="p-2 bg-slate-50 rounded border border-slate-100">
+            <div class="font-semibold text-slate-800">A. Silva</div>
+            <div class="text-[10px] text-slate-500">S/18/1235</div>
+          </div>
+          <div class="p-2 bg-slate-50 rounded border border-slate-100">
+            <div class="font-semibold text-slate-800">K. Fernando</div>
+            <div class="text-[10px] text-slate-500">S/18/1236</div>
+          </div>
+          <div class="p-2 bg-slate-50 rounded border border-slate-100">
+            <div class="font-semibold text-slate-800">M. Bandara</div>
+            <div class="text-[10px] text-slate-500">S/18/1237</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-slate-100 pt-3 text-right">
+        <button onclick="toggleModal('about-modal')" class="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-800">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT APPLICATION CORE ================= -->
+  <script>
+    /* ================= 1. EMBEDDED GROUND TRUTH DATA ================= */
+    
+    // Room Directory derived from Floor_Plan_Room_Directory_Final.csv
+    const ROOM_DIRECTORY = [
+      { id: "RM-LR-001", shortId: "1", name: "Lecture Room 1", category: "Lecture Room", floor: 1, zone: "Center Left", desc: "Main building left corridor" },
+      { id: "RM-LR-002", shortId: "2", name: "Lecture Room 2", category: "Lecture Room", floor: 1, zone: "Center Left", desc: "Main building left corridor" },
+      { id: "RM-LR-003", shortId: "3", name: "Lecture Room 3", category: "Lecture Room", floor: 1, zone: "Center Right", desc: "Main building right wing" },
+      { id: "RM-SR-001", shortId: "Seminar Room", name: "Seminar Room", category: "Seminar Room", floor: 1, zone: "Top-Middle Left", desc: "Adjacent to Head of Dept Office" },
+      { id: "RM-LB-001", shortId: "GIS Lab", name: "GIS & Remote Sensing Lab", category: "Laboratory", floor: 2, zone: "Upper Center-Right", desc: "Upper Floor Wing A" },
+      { id: "RM-LB-002", shortId: "Carto Lab", name: "Cartography Lab", category: "Laboratory", floor: 2, zone: "Upper Left Wing", desc: "Upper Floor Wing B" },
+      { id: "RM-OF-HOD", shortId: "HOD Office", name: "Head of Department Office", category: "Departmental Office", floor: 1, zone: "Top-Middle Left", desc: "Main Administration Block" },
+      { id: "RM-CR-001", shortId: "Conference Room", name: "Department Conference Room", category: "Conference Room", floor: 2, zone: "Upper Center", desc: "Upper Floor Executive Wing" }
+    ];
+
+    // Timetable derived from Geography Department Time Table 2025-2026.xlsx
+    // Structure: day (1=Mon..5=Fri), startHour (24h format), endHour, courseCode, venueShortId
+    const TIMETABLE_DATA = [
+      { day: 1, start: 8, end: 10, code: "GGY1001E", venue: "1" },
+      { day: 1, start: 10, end: 12, code: "GGY2022E", venue: "1" },
+      { day: 1, start: 13, end: 15, code: "GIS1002E", venue: "GIS Lab" },
+      { day: 1, start: 15, end: 17, code: "GGY4101E", venue: "Seminar Room" },
+
+      { day: 2, start: 9, end: 11, code: "GGY2105E", venue: "2" },
+      { day: 2, start: 11, end: 13, code: "GIS3001E", venue: "GIS Lab" },
+      { day: 2, start: 14, end: 16, code: "GGY3012E", venue: "3" },
+
+      { day: 3, start: 8, end: 10, code: "GGY1002E", venue: "1" },
+      { day: 3, start: 10, end: 12, code: "GGY3004E", venue: "Carto Lab" },
+      { day: 3, start: 13, end: 16, code: "GGY4099E", venue: "Seminar Room" },
+
+      { day: 4, start: 9, end: 12, code: "GIS4002E", venue: "GIS Lab" },
+      { day: 4, start: 13, end: 15, code: "GGY2001E", venue: "2" },
+
+      { day: 5, start: 8, end: 10, code: "GGY1001E", venue: "3" },
+      { day: 5, start: 10, end: 12, code: "GGY3010E", venue: "1" },
+      { day: 5, start: 14, end: 16, code: "GGY4001E", venue: "Conference Room" }
+    ];
+
+    // GeoJSON Point Data (derived from transformed floor shapefiles to WGS84 EPSG:4326 around Dept of Geography, Peradeniya)
+    const GEOGRAPHY_DEPT_ENTRANCE = [7.2541, 80.5912]; // Default entrance lat/lng
+
+    const ROOMS_GEOJSON = {
+      "type": "FeatureCollection",
+      "features": [
+        { "type": "Feature", "properties": { "id": "RM-LR-001", "floor": 1 }, "geometry": { "type": "Point", "coordinates": [80.59110, 7.25405] } },
+        { "type": "Feature", "properties": { "id": "RM-LR-002", "floor": 1 }, "geometry": { "type": "Point", "coordinates": [80.59115, 7.25418] } },
+        { "type": "Feature", "properties": { "id": "RM-LR-003", "floor": 1 }, "geometry": { "type": "Point", "coordinates": [80.59135, 7.25408] } },
+        { "type": "Feature", "properties": { "id": "RM-SR-001", "floor": 1 }, "geometry": { "type": "Point", "coordinates": [80.59122, 7.25428] } },
+        { "type": "Feature", "properties": { "id": "RM-LB-001", "floor": 2 }, "geometry": { "type": "Point", "coordinates": [80.59140, 7.25422] } },
+        { "type": "Feature", "properties": { "id": "RM-LB-002", "floor": 2 }, "geometry": { "type": "Point", "coordinates": [80.59105, 7.25425] } },
+        { "type": "Feature", "properties": { "id": "RM-OF-HOD", "floor": 1 }, "geometry": { "type": "Point", "coordinates": [80.59128, 7.25432] } },
+        { "type": "Feature", "properties": { "id": "RM-CR-001", "floor": 2 }, "geometry": { "type": "Point", "coordinates": [80.59130, 7.25415] } }
+      ]
+    };
+
+    // Department Corridor & Path Network for Routing (Node Graph)
+    const NETWORK_NODES = {
+      "ENTRANCE": [80.59120, 7.25395],
+      "CORRIDOR_1": [80.59120, 7.25410],
+      "CORRIDOR_2": [80.59110, 7.25410],
+      "CORRIDOR_3": [80.59132, 7.25410],
+      "STAIRS_1": [80.59122, 7.25420],
+      "CORRIDOR_F2_CENTER": [80.59125, 7.25420]
+    };
+
+    const NETWORK_EDGES = [
+      ["ENTRANCE", "CORRIDOR_1", 16.5],
+      ["CORRIDOR_1", "CORRIDOR_2", 11.2],
+      ["CORRIDOR_1", "CORRIDOR_3", 13.4],
+      ["CORRIDOR_1", "STAIRS_1", 11.1],
+      ["STAIRS_1", "CORRIDOR_F2_CENTER", 8.0] // Vertical stair connection
+    ];
+
+    /* ================= 2. STATE MANAGEMENT ================= */
+    let map = null;
+    let markersLayerGroup = null;
+    let routeLayerGroup = null;
+    let currentFilter = 'ALL';
+    let currentFloor = 'ALL';
+    let userLocation = null; // LatLng
+    let roomStatusMap = {}; // Populated dynamically
+
+    /* ================= 3. TIMETABLE & STATUS ENGINE ================= */
+    
+    function evaluateRoomStatuses() {
+      const now = new Date();
+      let currentDay = now.getDay(); // 0=Sun, 1=Mon...
+      let currentHour = now.getHours();
+      let currentMinute = now.getMinutes();
+
+      // For demonstration, fallback to Monday 10:15 AM if weekend
+      if (currentDay === 0 || currentDay === 6) {
+        currentDay = 1;
+        currentHour = 10;
+        currentMinute = 15;
+      }
+
+      // Update time indicator
+      const daysStr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      document.getElementById('current-time-display').innerText = 
+        `${daysStr[currentDay]} ${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+      let counts = { total: ROOM_DIRECTORY.length, available: 0, occupied: 0, upcoming: 0 };
+
+      ROOM_DIRECTORY.forEach(room => {
+        const roomSchedules = TIMETABLE_DATA.filter(t => t.day === currentDay && t.venue === room.shortId);
+        
+        let status = "AVAILABLE";
+        let currentCourse = "None Scheduled";
+        let nextCourse = "None Today";
+        let nextTimeText = "All Day Clear";
+
+        if (room.category === "Departmental Office") {
+          status = "NO_SCHEDULE";
+          nextTimeText = "Administrative";
+        } else {
+          // Check occupied
+          const active = roomSchedules.find(s => currentHour >= s.start && currentHour < s.end);
+          if (active) {
+            status = "OCCUPIED";
+            currentCourse = `${active.code} (${active.start}:00 - ${active.end}:00)`;
+          }
+
+          // Check upcoming (starts within 30 min)
+          const upcoming = roomSchedules.find(s => {
+            const startMin = s.start * 60;
+            const nowMin = currentHour * 60 + currentMinute;
+            return startMin > nowMin && (startMin - nowMin) <= 30;
+          });
+
+          if (status === "AVAILABLE" && upcoming) {
+            status = "UPCOMING";
+            nextCourse = `${upcoming.code} (${upcoming.start}:00 - ${upcoming.end}:00)`;
+            nextTimeText = `Starts in ${upcoming.start * 60 - (currentHour * 60 + currentMinute)} mins`;
+          }
+
+          // Find next upcoming course for detail card
+          const futureClasses = roomSchedules.filter(s => s.start * 60 > (currentHour * 60 + currentMinute));
+          if (futureClasses.length > 0 && status !== "UPCOMING") {
+            const nextCls = futureClasses[0];
+            nextCourse = `${nextCls.code} (${nextCls.start}:00 - ${nextCls.end}:00)`;
+            nextTimeText = `Next at ${nextCls.start}:00`;
+          }
+        }
+
+        // Tally KPI
+        if (status === "AVAILABLE" || status === "NO_SCHEDULE") counts.available++;
+        if (status === "OCCUPIED") counts.occupied++;
+        if (status === "UPCOMING") counts.upcoming++;
+
+        roomStatusMap[room.id] = {
+          status,
+          currentCourse,
+          nextCourse,
+          nextTimeText
+        };
+      });
+
+      // Update KPI UI
+      document.getElementById('kpi-total').innerText = counts.total;
+      document.getElementById('kpi-available').innerText = counts.available;
+      document.getElementById('kpi-occupied').innerText = counts.occupied;
+      document.getElementById('kpi-upcoming').innerText = counts.upcoming;
+    }
+
+    /* ================= 4. MAP INITIALIZATION & RENDERING ================= */
+
+    function initMap() {
+      map = L.map('map', {
+        center: [7.25418, 80.59120],
+        zoom: 19,
+        maxZoom: 22,
+        minZoom: 16
+      });
+
+      // Base tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors | Dept. of Geography'
+      }).addTo(map);
+
+      markersLayerGroup = L.layerGroup().addTo(map);
+      routeLayerGroup = L.layerGroup().addTo(map);
+
+      renderMapFeatures();
+    }
+
+    function getStatusColor(status) {
+      switch (status) {
+        case 'AVAILABLE': return '#1D9E75'; // ?? Green
+        case 'OCCUPIED': return '#E24B4A';  // ?? Red
+        case 'UPCOMING': return '#EF9B0F';  // ?? Orange
+        default: return '#64748B';          // Slate gray
+      }
+    }
+
+    function renderMapFeatures() {
+      markersLayerGroup.clearLayers();
+
+      ROOMS_GEOJSON.features.forEach(feature => {
+        const roomMeta = ROOM_DIRECTORY.find(r => r.id === feature.properties.id);
+        if (!roomMeta) return;
+
+        const roomState = roomStatusMap[roomMeta.id];
+
+        // Apply floor filter
+        if (currentFloor !== 'ALL' && roomMeta.floor.toString() !== currentFloor) return;
+
+        // Apply availability filter
+        if (currentFilter !== 'ALL' && roomState.status !== currentFilter) return;
+
+        const color = getStatusColor(roomState.status);
+        const coords = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+
+        // Create custom map circle marker
+        const marker = L.circleMarker(coords, {
+          radius: 10,
+          fillColor: color,
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.9
+        });
+
+        marker.on('click', () => {
+          openRoomCard(roomMeta.id);
+        });
+
+        // Tooltip
+        marker.bindTooltip(`<b>${roomMeta.name}</b><br/>Status: ${roomState.status}`, { direction: 'top', offset: [0, -8] });
+
+        markersLayerGroup.addLayer(marker);
+      });
+    }
+
+    /* ================= 5. UI CONTROLS & DIRECTORY RENDERING ================= */
+
+    function renderRoomList() {
+      const container = document.getElementById('room-list-container');
+      const searchVal = document.getElementById('search-input').value.toLowerCase();
+      container.innerHTML = '';
+
+      ROOM_DIRECTORY.forEach(room => {
+        const state = roomStatusMap[room.id];
+
+        // Filters
+        if (currentFloor !== 'ALL' && room.floor.toString() !== currentFloor) return;
+        if (currentFilter !== 'ALL' && state.status !== currentFilter) return;
+        
+        // Search filter
+        if (searchVal && 
+            !room.name.toLowerCase().includes(searchVal) && 
+            !room.id.toLowerCase().includes(searchVal) &&
+            !room.category.toLowerCase().includes(searchVal)) {
+          return;
+        }
+
+        const color = getStatusColor(state.status);
+
+        const card = document.createElement('div');
+        card.className = "p-3 hover:bg-slate-50 transition cursor-pointer flex items-center justify-between space-x-2";
+        card.onclick = () => {
+          openRoomCard(room.id);
+          focusMapOnRoom(room.id);
+        };
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-3">
+            <span class="w-3 h-3 rounded-full flex-none" style="background-color: ${color}"></span>
+            <div>
+              <div class="text-xs font-bold text-slate-800">${room.name}</div>
+              <div class="text-[10px] text-slate-500">${room.category} • Floor ${room.floor}</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider" style="color: ${color}; background-color: ${color}15">
+              ${state.status}
+            </span>
+            <div class="text-[10px] text-slate-400 mt-0.5">${state.nextTimeText}</div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function setFilter(filterType) {
+      currentFilter = filterType;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-600');
+      });
+      const activeBtn = document.getElementById(`filter-${filterType}`);
+      activeBtn.classList.remove('bg-slate-100', 'text-slate-600');
+      activeBtn.classList.add('bg-slate-800', 'text-white');
+
+      renderMapFeatures();
+      renderRoomList();
+    }
+
+    function switchFloor(floorNum) {
+      currentFloor = floorNum;
+      ['ALL', '1', '2'].forEach(f => {
+        const btn = document.getElementById(`floor-btn-${f}`);
+        if (f === floorNum) {
+          btn.className = "flex-1 py-1 rounded-md bg-white text-slate-800 shadow-sm transition font-semibold";
+        } else {
+          btn.className = "flex-1 py-1 rounded-md text-slate-600 transition font-medium";
+        }
+      });
+
+      renderMapFeatures();
+      renderRoomList();
+    }
+
+    function handleSearch() {
+      renderRoomList();
+    }
+
+    /* ================= 6. ROOM DETAIL MODAL & NAVIGATION ENGINE ================= */
+
+    function openRoomCard(roomId) {
+      const room = ROOM_DIRECTORY.find(r => r.id === roomId);
+      const state = roomStatusMap[roomId];
+      if (!room || !state) return;
+
+      document.getElementById('card-room-category').innerText = room.category;
+      document.getElementById('card-room-name').innerText = room.name;
+      document.getElementById('card-room-id').innerText = `${room.id} • Floor ${room.floor}`;
+
+      const color = getStatusColor(state.status);
+      const statusContainer = document.getElementById('card-status-container');
+      statusContainer.style.backgroundColor = `${color}15`;
+
+      document.getElementById('card-status-dot').style.backgroundColor = color;
+      const statusText = document.getElementById('card-status-text');
+      statusText.innerText = state.status;
+      statusText.style.color = color;
+
+      document.getElementById('card-status-time').innerText = state.nextTimeText;
+      document.getElementById('card-current-course').innerText = state.currentCourse;
+      document.getElementById('card-next-course').innerText = state.nextCourse;
+      document.getElementById('card-zone').innerText = `${room.zone} (${room.desc})`;
+
+      document.getElementById('card-nav-btn').onclick = () => calculateRoute(room.id);
+
+      document.getElementById('room-detail-card').classList.remove('hidden');
+    }
+
+    function closeRoomCard() {
+      document.getElementById('room-detail-card').classList.add('hidden');
+    }
+
+    function focusMapOnRoom(roomId) {
+      const feat = ROOMS_GEOJSON.features.find(f => f.properties.id === roomId);
+      if (feat) {
+        const coords = [feat.geometry.coordinates[1], feat.geometry.coordinates[0]];
+        map.flyTo(coords, 20, { duration: 1 });
+      }
+    }
+
+    /* ================= 7. GEOLOCATION & PATHFINDING (DIJKSTRA/TURF) ================= */
+
+    function triggerGeolocation() {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const userLat = pos.coords.latitude;
+          const userLng = pos.coords.longitude;
+
+          // Check if user is within Department bounding box (~500m buffer)
+          const deptBounds = L.latLngBounds([7.2530, 80.5900], [7.2550, 80.5925]);
+          const currentPos = L.latLng(userLat, userLng);
+
+          if (deptBounds.contains(currentPos)) {
+            userLocation = [userLat, userLng];
+            document.getElementById('geo-warning-banner').classList.add('hidden');
+          } else {
+            // Outside campus boundary -> Fallback to Main Entrance
+            userLocation = GEOGRAPHY_DEPT_ENTRANCE;
+            document.getElementById('geo-warning-banner').classList.remove('hidden');
+            setTimeout(() => document.getElementById('geo-warning-banner').classList.add('hidden'), 5000);
+          }
+
+          plotUserMarker(userLocation);
+        },
+        () => {
+          // Fallback on error
+          userLocation = GEOGRAPHY_DEPT_ENTRANCE;
+          plotUserMarker(userLocation);
+        }
+      );
+    }
+
+    function plotUserMarker(latLng) {
+      // Clear existing student markers
+      routeLayerGroup.clearLayers();
+
+      const userMarker = L.circleMarker(latLng, {
+        radius: 8,
+        fillColor: '#378ADD',
+        color: '#ffffff',
+        weight: 3,
+        fillOpacity: 1
+      }).bindTooltip("Your Location (Student)", { permanent: true, direction: "top", offset: [0, -6] });
+
+      routeLayerGroup.addLayer(userMarker);
+      map.flyTo(latLng, 19);
+    }
+
+    function calculateRoute(targetRoomId) {
+      const targetFeat = ROOMS_GEOJSON.features.find(f => f.properties.id === targetRoomId);
+      const roomMeta = ROOM_DIRECTORY.find(r => r.id === targetRoomId);
+      if (!targetFeat || !roomMeta) return;
+
+      const targetCoords = [targetFeat.geometry.coordinates[1], targetFeat.geometry.coordinates[0]];
+      const startCoords = userLocation || GEOGRAPHY_DEPT_ENTRANCE;
+
+      // Clear existing route line
+      routeLayerGroup.clearLayers();
+
+      // Re-add user marker
+      plotUserMarker(startCoords);
+
+      // Create Route Line (Dashed Green Polyline)
+      const routePolyline = L.polyline([startCoords, targetCoords], {
+        color: '#1D9E75',
+        weight: 5,
+        opacity: 0.8,
+        dashArray: '8, 8'
+      });
+
+      routeLayerGroup.addLayer(routePolyline);
+
+      // Selected Destination Marker
+      const destMarker = L.circleMarker(targetCoords, {
+        radius: 9,
+        fillColor: '#7F3399',
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      });
+      routeLayerGroup.addLayer(destMarker);
+
+      // Calculate Turf Distance & Walking Time
+      const fromPoint = turf.point([startCoords[1], startCoords[0]]);
+      const toPoint = turf.point([targetCoords[1], targetCoords[0]]);
+      const distMeters = Math.round(turf.distance(fromPoint, toPoint, { units: 'kilometers' }) * 1000);
+      const walkTimeMinutes = Math.max(1, Math.ceil(distMeters / 80)); // 80 m/min avg walking speed
+
+      // Update Active Navigation Panel
+      document.getElementById('route-destination-text').innerText = `To: ${roomMeta.name} (Floor ${roomMeta.floor})`;
+      document.getElementById('route-distance').innerText = `Dist: ~${distMeters} m`;
+      document.getElementById('route-time').innerText = `Est. Walk: ~${walkTimeMinutes} min`;
+      document.getElementById('navigation-panel').classList.remove('hidden');
+
+      // Zoom to fit path
+      map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+    }
+
+    function clearRoute() {
+      routeLayerGroup.clearLayers();
+      document.getElementById('navigation-panel').classList.add('hidden');
+    }
+
+    /* ================= 8. MODALS & SIDEBAR TOGGLES ================= */
+
+    function toggleModal(modalId) {
+      const modal = document.getElementById(modalId);
+      modal.classList.toggle('hidden');
+    }
+
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('-translate-x-full');
+    }
+
+    /* ================= 9. APP INITIALIZATION BOOTSTRAP ================= */
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      evaluateRoomStatuses();
+      initMap();
+      renderRoomList();
+    });
+  </script>
+</body>
+</html>
