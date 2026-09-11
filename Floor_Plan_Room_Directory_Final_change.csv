@@ -1,0 +1,22 @@
+﻿Unique Room ID;Map Reference No.;Room / Label Name;Type / Function;Layout Location;Notes / Details
+RM-LR-001;1;Lecture room 1;Lecture Room;Center Left;Main building left corridor
+RM-LR-002;2;Lecture room 2;Lecture Room;Top-Middle Left;Upper left wing
+RM-SR-001;3;Seminar room;Seminar Room;Top Left;End of upper corridor
+RM-OF-004A;4;4 A;Office / Room;Top Center-Right;Upper center wing
+RM-OF-004;5;4;Office / Room;Upper Center-Right;Upper corridor section
+RM-LB-001;6;Soil Laboratory 1;Laboratory;Upper Center-Right;Specialized soil lab
+RM-LB-002;7;Lab 2;Laboratory;Upper Center-Right;Secondary laboratory
+RM-OF-HOD;8;Head of the Department;Departmental Office;Center Right;HoD Main Office
+RM-OF-009;9;office;Administrative Office;Center Right;Departmental admin office
+RM-OF-010;10;office;Administrative Office;Center;Central admin office
+RM-LG-017;11;visitors lounge 17;Lounge / Waiting Area;Center Right;Visitor lounge area (17)
+RM-OF-016;12;16;Office / Staff Room;Lower Center-Right;Staff room 16
+RM-ST-014;13;MIR. R.A.K.UR. E.G.I Sewwandi 14;Staff / Faculty Office;Lower Center-Right;Faculty office 14
+RM-ST-015;14;Wicramasooriya 15;Staff / Faculty Office;Lower Center-Right;Faculty office 15
+RM-OF-013;15;13;Office / Room;Bottom Center;Room 13
+RM-LR-012;16;Lecture room 12;Lecture Room;Bottom Center;Lecture room 12
+RM-GEN-011;17;11;Unassigned / General Room;Bottom Left;General room 11
+RM-LR-003;18;Lecture room -3;Lecture Room;Lower-Middle Left;Lecture room 3
+RM-LIB-009;19;Library 09;Library / Facility;Lower-Middle Left;Library facility (09)
+RM-TH-GT01;20;Geography Theater;Lecture Theater;Center Right;Geography lecture theater
+RM-LR-VT01;21;Vithanage Theater;Lecture Room;Bottom Right;Vithanage lecture room
